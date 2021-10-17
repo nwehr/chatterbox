@@ -6,36 +6,38 @@ import (
 	"net"
 	"os"
 
-	"github.com/nwehr/chatterbox/pkg/identity"
+	"github.com/nwehr/chatterbox"
 )
 
+type options struct {
+	Identity chatterbox.Identity
+}
+
 func main() {
-	var ident string
-	var message string
-	var to string
+	var options options
 
-	flag.StringVar(&ident, "i", "", "Identity")
-	flag.StringVar(&message, "m", "", "Message")
-	flag.StringVar(&to, "to", "", "To")
-	flag.Parse()
+	{
+		var ident string
+		var message string
+		var to string
 
-	if ident == "" {
-		printAndExit("no identity provided")
+		flag.StringVar(&ident, "i", "", "Identity")
+		flag.StringVar(&message, "m", "", "Message")
+		flag.StringVar(&to, "to", "", "To")
+		flag.Parse()
+
+		options.Identity = chatterbox.Identity(ident)
 	}
 
-	_, addrs, err := net.LookupSRV("chatterbox-client", "tcp", identity.Identity(ident).Host())
+	_, addrs, err := net.LookupSRV("chatterbox-client", "tcp", options.Identity.Host())
 	if err != nil {
 		printAndExit(err.Error())
 	}
-
-	fmt.Printf("connecting to %s:%d\n", addrs[0].Target, addrs[0].Port)
 
 	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", addrs[0].Target, addrs[0].Port))
 	if err != nil {
 		printAndExit(err.Error())
 	}
-
-	fmt.Printf("connecting to %s\n", addr.String())
 
 	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
@@ -44,10 +46,16 @@ func main() {
 
 	defer conn.Close()
 
-	_, err = conn.Write([]byte(ident))
-	if err != nil {
+	login := chatterbox.LoginRequest(options.Identity, "")
+
+	if err = login.Write(conn); err != nil {
 		printAndExit(err.Error())
 	}
+
+	resp := chatterbox.Response{}
+	resp.Read(conn)
+
+	fmt.Println(resp.Type)
 }
 
 func printAndExit(msg string) {

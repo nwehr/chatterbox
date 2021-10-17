@@ -7,22 +7,23 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 
-	"github.com/nwehr/chatterbox/pkg/identity"
+	"github.com/nwehr/chatterbox"
+	"github.com/nwehr/chatterbox/pkg/session"
 )
+
+var sessions []session.Session
 
 func main() {
 	var address, port string
 
-	flag.StringVar(&address, "a", "0.0.0.0", "Bind address, default 0.0.0.0")
-	flag.StringVar(&port, "p", "6847", "Listen port, default 6847")
+	{
+		flag.StringVar(&address, "b", "0.0.0.0", "Bind address, default 0.0.0.0")
+		flag.StringVar(&port, "p", "6847", "Listen port, default 6847")
+		flag.Parse()
+	}
 
-	flag.Parse()
-
-	listen := fmt.Sprintf("%s:%s", address, port)
-
-	listener, err := net.Listen("tcp", listen)
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", address, port))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,53 +31,58 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 
-		go func(conn net.Conn) {
-			ident := identity.Identity("")
+		go handleNewConnection(conn)
+	}
+}
 
-			{
-				buff := make([]byte, 256)
-				_, err := conn.Read(buff)
-				if err != nil {
+func handleNewConnection(conn net.Conn) {
+	var ident chatterbox.Identity
 
-				}
+	{
+		req := chatterbox.Request{}
+		err := req.Read(conn)
+		if err != nil {
 
-				ident = identity.Identity(buff)
-			}
+		}
 
-			log.Printf("new session for %s\n", string(ident))
+		ident = chatterbox.Identity(req.Args["Identity"])
 
-			for {
-				buff := make([]byte, 2048)
-				conn.SetReadDeadline(time.Now().Add(time.Second * 30))
-				_, err := conn.Read(buff)
+		chatterbox.OKResponse().Write(conn)
+	}
 
-				if err == os.ErrDeadlineExceeded {
-					continue
-				}
+	s := session.NewSession(ident, conn)
 
-				if err == io.EOF {
-					log.Println("connection closed")
-					conn.Close()
-					break
-				}
+	defer session.QuitSession(s.ID)
 
-				if err == net.ErrClosed {
-					log.Println("connection closed")
-					break
-				}
+	log.Printf("new session for %s\n", string(ident))
 
-				if err != nil {
-					log.Printf("could not read: %s\n", err.Error())
-					break
-				}
+	for {
+		req := chatterbox.Request{}
+		err := req.Read(conn)
 
-				fmt.Println(string(buff))
+		if err == os.ErrDeadlineExceeded {
+			continue
+		}
 
-				conn.Write([]byte("Ok"))
-			}
-		}(conn)
+		if err == io.EOF {
+			log.Println("connection closed")
+			conn.Close()
+			break
+		}
+
+		if err == net.ErrClosed {
+			log.Println("connection closed")
+			break
+		}
+
+		if err != nil {
+			log.Printf("could not read: %s\n", err.Error())
+			break
+		}
+
+		fmt.Println(req.Type)
 	}
 }
