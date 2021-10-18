@@ -43,3 +43,27 @@ func TestSendWrite(t *testing.T) {
 	// 	t.Errorf("got '%s'; expected '%s'", w.String(), expected)
 	// }
 }
+
+func TestSendOK(t *testing.T) {
+	buf := new(bytes.Buffer)
+
+	{
+		msg := Ok()
+		if err := msg.Write(buf); err != nil {
+			t.Error(err)
+		}
+	}
+
+	{
+		// io.Copy(rBuf, wBuf)
+
+		msg := Message{}
+		if err := msg.Read(buf); err != nil {
+			t.Error(err)
+		}
+
+		if msg.Type != "OK" {
+			t.Errorf("expected OK; got %s", msg.Type)
+		}
+	}
+}

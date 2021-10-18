@@ -79,6 +79,11 @@ func (msg *Message) parseMainLine(buf []byte) error {
 
 	for _, ch := range buf {
 		if ch == '\n' {
+			if msg.Type == "" {
+				msg.Type = key
+			} else {
+				msg.Args.Add(key, value)
+			}
 			break
 		}
 
@@ -112,10 +117,8 @@ func (msg *Message) parseMainLine(buf []byte) error {
 		} else {
 			value += string(ch)
 		}
-
 	}
 
-	msg.Args.Add(key, value)
 	return nil
 }
 
