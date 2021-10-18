@@ -4,17 +4,29 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 
 	"github.com/nwehr/chatterbox"
 )
 
-// var sessions []chatterbox.Session
+func main() {
+	var address, port string
+
+	{
+		flag.StringVar(&address, "b", "0.0.0.0", "Bind address, default 0.0.0.0")
+		flag.StringVar(&port, "p", "6847", "Listen port, default 6847")
+		flag.Parse()
+	}
+
+	serv := &server{}
+	serv.sessions = map[chatterbox.Identity][]net.Conn{}
+
+	fmt.Println(serv.listen(fmt.Sprintf("%s:%s", address, port)))
+}
 
 type server struct {
-	sessions map[string][]net.Conn
+	sessions map[chatterbox.Identity][]net.Conn
 }
 
 func (s *server) listen(addr string) error {
@@ -39,85 +51,64 @@ func (s *server) listen(addr string) error {
 func (s *server) handleNewConnection(conn net.Conn) {
 	ident := chatterbox.Identity("")
 
-	// first request by client should be LOGIN
+	// first message by a client should be LOGIN
 	{
-		login := chatterbox.Request{}
-		if err := login.Read(conn); err != nil {
+		msg := chatterbox.Message{}
+		if err := msg.Read(conn); err != nil {
 			fmt.Println("could not read login request", err)
 			return
 
 		}
 
-		if login.Type != "LOGIN" {
-			fmt.Printf("expected LOGIN; got %s\n", login.Type)
+		if msg.Type != "LOGIN" {
+			fmt.Printf("expected LOGIN; got %s\n", msg.Type)
 			return
 		}
 
-		chatterbox.OKResponse().Write(conn)
+		chatterbox.Ok().Write(conn)
 
-		ident = chatterbox.Identity(login.Args["Identity"][0])
+		ident = chatterbox.Identity(msg.Args["Identity"][0])
 	}
 
-	s.sessions[string(ident)] = append(s.sessions[string(ident)], conn)
+	s.sessions[ident] = append(s.sessions[ident], conn)
 
-	fmt.Println(len(s.sessions[string(ident)]), " sessions for ", string(ident))
+	fmt.Printf("new session for %s; %d total\n", string(ident), len(s.sessions[ident]))
 
 	for {
-		req := chatterbox.Request{}
-		if err := req.Read(conn); err != nil {
+		msg := chatterbox.Message{}
+		if err := msg.Read(conn); err != nil {
 			if err == os.ErrDeadlineExceeded {
 				continue
 			}
 
 			if err == io.EOF {
-				log.Println("connection closed")
+				fmt.Println("connection closed")
 				conn.Close()
 				break
 			}
 
 			if err == net.ErrClosed {
-				log.Println("connection closed")
+				fmt.Println("connection closed")
 				break
 			}
 
 			if err != nil {
-				log.Printf("could not read: %s\n", err.Error())
+				fmt.Printf("could not read: %s\n", err.Error())
 				break
 			}
 		}
 
-		s.handleRequest(req)
+		s.handleMessage(msg)
 	}
 }
 
-func (s *server) handleRequest(req chatterbox.Request) {
-	fmt.Println("sessions ", s.sessions)
-
-	switch req.Type {
+func (s *server) handleMessage(msg chatterbox.Message) {
+	switch msg.Type {
 	case "SEND":
-		for _, to := range req.Args["To"] {
-			fmt.Println("forwarding to ", string(to))
-			fmt.Println(len(s.sessions[to]), " sessions")
-			for _, conn := range s.sessions[to] {
-				fmt.Println("writing to ", string(to))
-				go req.Write(conn)
+		for _, to := range msg.Args["To"] {
+			for _, conn := range s.sessions[chatterbox.Identity(to)] {
+				go msg.Write(conn)
 			}
 		}
 	}
-}
-
-func main() {
-	var address, port string
-
-	{
-		flag.StringVar(&address, "b", "0.0.0.0", "Bind address, default 0.0.0.0")
-		flag.StringVar(&port, "p", "6847", "Listen port, default 6847")
-		flag.Parse()
-	}
-
-	serv := &server{}
-	serv.sessions = map[string][]net.Conn{}
-
-	log.Fatal(serv.listen(fmt.Sprintf("%s:%s", address, port)))
-
 }

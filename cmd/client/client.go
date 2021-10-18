@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 
@@ -48,7 +47,8 @@ func main() {
 	go client.handleRequests()
 
 	if err := ui.Init(); err != nil {
-		log.Fatalf("failed to initialize termui: %v", err)
+		fmt.Printf("failed to initialize termui: %v", err)
+		return
 	}
 	defer ui.Close()
 
@@ -74,7 +74,7 @@ func main() {
 				inp.cursorLoc = len(inp.Text)
 			case "<Enter>":
 				if len(inp.Text) > 0 {
-					req := chatterbox.SendRequest(chatterbox.Identity(client.ident), []chatterbox.Identity{client.ident, client.to[0]}, inp.Text)
+					req := chatterbox.Send(chatterbox.Identity(client.ident), []chatterbox.Identity{client.ident, client.to[0]}, inp.Text)
 					if err := req.Write(client.conn); err != nil {
 						fmt.Println(err)
 					}
@@ -139,12 +139,12 @@ func (c *client) connect() error {
 }
 
 func (c *client) login() error {
-	login := chatterbox.LoginRequest(c.ident, "")
+	login := chatterbox.Login(c.ident, "")
 	if err := login.Write(c.conn); err != nil {
 		return err
 	}
 
-	resp := chatterbox.Response{}
+	resp := chatterbox.Message{}
 	if err := resp.Read(c.conn); err != nil {
 		return err
 	}
@@ -158,14 +158,14 @@ func (c *client) login() error {
 
 func (c *client) handleRequests() {
 	for {
-		req := chatterbox.Request{}
-		if err := req.Read(c.conn); err != nil {
+		msg := chatterbox.Message{}
+		if err := msg.Read(c.conn); err != nil {
 			fmt.Println("read", err)
 			continue
 		}
 
-		if req.Type == "SEND" {
-			p.Text += fmt.Sprintf("%s: %s\n", req.Args["From"][0], string(req.Data))
+		if msg.Type == "SEND" {
+			p.Text += fmt.Sprintf("%s: %s\n", msg.Args["From"][0], string(msg.Data))
 			// fmt.Printf("\r%s:\n%s\n\n", req.Args["From"][0], string(req.Data))
 			ui.Render(p, inp)
 		}

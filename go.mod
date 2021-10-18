@@ -2,12 +2,13 @@ module github.com/nwehr/chatterbox
 
 go 1.17
 
+require github.com/gizak/termui/v3 v3.1.0
+
 require (
 	github.com/eiannone/keyboard v0.0.0-20200508000154-caf4b762e807 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.4.1-0.20210905002822-f057f0a857a1 // indirect
 	github.com/gizak/termui v3.1.0+incompatible // indirect
-	github.com/gizak/termui/v3 v3.1.0 // indirect
 	github.com/jroimartin/gocui v0.5.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect

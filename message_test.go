@@ -74,23 +74,23 @@ func TestSendRead(t *testing.T) {
 	buf := []byte("SEND To=@nate.errorcode.io From=@nate.errorcode.io Length=11\nHello World\n")
 	rd := bytes.NewReader(buf)
 
-	req := Request{}
-	req.Read(rd)
+	msg := Message{}
+	msg.Read(rd)
 
-	if req.Type != "SEND" {
-		t.Errorf("'%s' != '%s'", req.Type, "SEND")
+	if msg.Type != "SEND" {
+		t.Errorf("'%s' != '%s'", msg.Type, "SEND")
 	}
 
-	if req.Args["To"][0] != "@nate.errorcode.io" {
-		t.Errorf("'%s' != '%s'", req.Args["To"][0], "@nate.errorcode.io")
+	if msg.Args["To"][0] != "@nate.errorcode.io" {
+		t.Errorf("'%s' != '%s'", msg.Args["To"][0], "@nate.errorcode.io")
 	}
 
 	// if req.Args["To"][1] != "@kevpatt.errorcode.io" {
 	// 	t.Errorf("'%s' != '%s'", req.Args["To"][1], "@evpatt.errorcode.io")
 	// }
 
-	if string(req.Data) != "Hello World" {
-		t.Errorf("'%s' != '%s'", string(req.Data), "Hello World")
+	if string(msg.Data) != "Hello World" {
+		t.Errorf("'%s' != '%s'", string(msg.Data), "Hello World")
 	}
 }
 
@@ -98,8 +98,8 @@ func TestSendWrite(t *testing.T) {
 	buf := make([]byte, 512)
 	w := bytes.NewBuffer(buf)
 
-	req := SendRequest(Identity("@nate.errorcode.io"), []Identity{"@nate.errorcode.io", "@kevpatt.errorcode.io"}, "Hello, world!")
-	req.Write(w)
+	msg := Send(Identity("@nate.errorcode.io"), []Identity{"@nate.errorcode.io", "@kevpatt.errorcode.io"}, "Hello, world!")
+	msg.Write(w)
 
 	if w.String() != "" {
 		// t.Error(w.String())

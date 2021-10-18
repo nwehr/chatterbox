@@ -17,13 +17,13 @@ func (h Args) Add(key, value string) {
 	h[key] = append(h[key], value)
 }
 
-type Request struct {
+type Message struct {
 	Type string
 	Args Args
 	Data []byte
 }
 
-func (req *Request) Read(r io.Reader) error {
+func (msg *Message) Read(r io.Reader) error {
 	reader := bufio.NewReader(r)
 
 	mainLine, err := reader.ReadBytes('\n')
@@ -31,46 +31,46 @@ func (req *Request) Read(r io.Reader) error {
 		return err
 	}
 
-	err = req.parseMainLine(mainLine)
+	err = msg.parseMainLine(mainLine)
 	if err != nil {
 		return err
 	}
 
-	if len(req.Args["Length"]) > 0 {
+	if len(msg.Args["Length"]) > 0 {
 		data, err := reader.ReadBytes('\n')
 		if err != nil {
 			return err
 		}
 
-		req.Data = data[:len(data)-1]
+		msg.Data = data[:len(data)-1]
 	}
 
 	return nil
 }
 
-func (r Request) Write(w io.Writer) error {
-	fmt.Fprintf(w, "%s\n", r.mainLine())
+func (msg Message) Write(w io.Writer) error {
+	fmt.Fprintf(w, "%s\n", msg.mainLine())
 
-	if len(r.Data) > 0 {
-		w.Write(r.Data)
+	if len(msg.Data) > 0 {
+		w.Write(msg.Data)
 		w.Write([]byte{'\n'})
 	}
 
 	return nil
 }
 
-func (r Request) mainLine() string {
-	line := r.Type
+func (msg Message) mainLine() string {
+	line := msg.Type
 
-	for key, values := range r.Args {
+	for key, values := range msg.Args {
 		line += fmt.Sprintf(" %s=%s", key, strings.Join(values, ";"))
 	}
 
 	return line
 }
 
-func (r *Request) parseMainLine(buf []byte) error {
-	r.Args = Args{}
+func (msg *Message) parseMainLine(buf []byte) error {
+	msg.Args = Args{}
 
 	key := ""
 	value := ""
@@ -83,10 +83,10 @@ func (r *Request) parseMainLine(buf []byte) error {
 		}
 
 		if ch == ' ' {
-			if r.Type == "" {
-				r.Type = key
+			if msg.Type == "" {
+				msg.Type = key
 			} else {
-				r.Args.Add(key, value)
+				msg.Args.Add(key, value)
 			}
 
 			key = ""
@@ -102,7 +102,7 @@ func (r *Request) parseMainLine(buf []byte) error {
 		}
 
 		if ch == ';' {
-			r.Args.Add(key, value)
+			msg.Args.Add(key, value)
 			value = ""
 			continue
 		}
@@ -115,7 +115,7 @@ func (r *Request) parseMainLine(buf []byte) error {
 
 	}
 
-	r.Args.Add(key, value)
+	msg.Args.Add(key, value)
 	return nil
 }
 
@@ -167,8 +167,8 @@ func parseMainLine(buf []byte) (string, Args, error) {
 	return rType, args, nil
 }
 
-func LoginRequest(ident Identity, password string) Request {
-	return Request{
+func Login(ident Identity, password string) Message {
+	return Message{
 		Type: "LOGIN",
 		Args: Args{
 			"Identity": []string{string(ident)},
@@ -177,14 +177,14 @@ func LoginRequest(ident Identity, password string) Request {
 	}
 }
 
-func SendRequest(from Identity, to []Identity, msg string) Request {
+func Send(from Identity, to []Identity, msg string) Message {
 	strTo := []string{}
 
 	for _, ident := range to {
 		strTo = append(strTo, string(ident))
 	}
 
-	return Request{
+	return Message{
 		Type: "SEND",
 		Args: Args{
 			"To":     strTo,
@@ -192,5 +192,11 @@ func SendRequest(from Identity, to []Identity, msg string) Request {
 			"Length": []string{fmt.Sprintf("%d", len(msg))},
 		},
 		Data: []byte(msg),
+	}
+}
+
+func Ok() Message {
+	return Message{
+		Type: "OK",
 	}
 }
