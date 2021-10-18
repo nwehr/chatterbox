@@ -3,59 +3,175 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
 
+	ui "github.com/gizak/termui/v3"
 	"github.com/nwehr/chatterbox"
 )
 
-type options struct {
-	Identity chatterbox.Identity
-}
+var (
+	p   *messages
+	inp *input
+)
 
 func main() {
-	var options options
+	client := client{}
 
 	{
 		var ident string
-		var message string
 		var to string
 
 		flag.StringVar(&ident, "i", "", "Identity")
-		flag.StringVar(&message, "m", "", "Message")
 		flag.StringVar(&to, "to", "", "To")
 		flag.Parse()
 
-		options.Identity = chatterbox.Identity(ident)
+		client.ident = chatterbox.Identity(ident)
+		client.to = []chatterbox.Identity{chatterbox.Identity(to)}
 	}
 
-	_, addrs, err := net.LookupSRV("chatterbox-client", "tcp", options.Identity.Host())
-	if err != nil {
+	fmt.Print("connecting... ")
+	if err := client.connect(); err != nil {
 		printAndExit(err.Error())
+	}
+	fmt.Println("done")
+
+	defer client.conn.Close()
+
+	fmt.Print("logging in... ")
+	if err := client.login(); err != nil {
+		printAndExit(err.Error())
+	}
+	fmt.Println("done")
+
+	go client.handleRequests()
+
+	if err := ui.Init(); err != nil {
+		log.Fatalf("failed to initialize termui: %v", err)
+	}
+	defer ui.Close()
+
+	width, height := ui.TerminalDimensions()
+
+	p = newMessages()
+	p.SetRect(0, 0, width, height-5)
+
+	inp = newInput()
+	inp.Text = ""
+	inp.WrapText = true
+	inp.SetRect(0, height-5, width, height)
+
+	ui.Render(p, inp)
+
+	for e := range ui.PollEvents() {
+		if e.Type == ui.KeyboardEvent {
+			switch e.ID {
+			case "<C-c>":
+				return
+			case "<C-v>":
+				inp.Text = "pasted data"
+				inp.cursorLoc = len(inp.Text)
+			case "<Enter>":
+				if len(inp.Text) > 0 {
+					req := chatterbox.SendRequest(chatterbox.Identity(client.ident), []chatterbox.Identity{client.ident, client.to[0]}, inp.Text)
+					if err := req.Write(client.conn); err != nil {
+						fmt.Println(err)
+					}
+
+					client.msg = []byte("")
+				}
+				// p.Text += "\n" + inp.Text
+				inp.Text = ""
+				inp.cursorLoc = 0
+			case "<Left>":
+				if inp.cursorLoc > 0 {
+					inp.cursorLoc -= 1
+				}
+			case "<Right>":
+				if inp.cursorLoc < len(inp.Text) {
+					inp.cursorLoc += 1
+				}
+			case "<Backspace>":
+				if len(inp.Text) > 0 {
+					inp.Text = inp.Text[:inp.cursorLoc-1] + inp.Text[inp.cursorLoc:]
+					inp.cursorLoc -= 1
+				}
+			case "<Space>":
+				inp.Text = inp.Text[:inp.cursorLoc] + " " + inp.Text[inp.cursorLoc:]
+				inp.cursorLoc += 1
+			default:
+				if len(e.ID) == 1 {
+					inp.Text = inp.Text[:inp.cursorLoc] + e.ID + inp.Text[inp.cursorLoc:]
+					inp.cursorLoc += 1
+				}
+			}
+
+			ui.Render(p, inp)
+		}
+	}
+}
+
+type client struct {
+	ident chatterbox.Identity
+	to    []chatterbox.Identity
+	conn  net.Conn
+	msg   []byte
+}
+
+func (c *client) connect() error {
+	_, addrs, err := net.LookupSRV("chatterbox-client", "tcp", c.ident.Host())
+	if err != nil {
+		return err
 	}
 
 	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", addrs[0].Target, addrs[0].Port))
 	if err != nil {
-		printAndExit(err.Error())
+		return err
 	}
 
-	conn, err := net.DialTCP("tcp", nil, addr)
+	c.conn, err = net.DialTCP("tcp", nil, addr)
 	if err != nil {
-		printAndExit(err.Error())
+		return err
 	}
 
-	defer conn.Close()
+	return nil
+}
 
-	login := chatterbox.LoginRequest(options.Identity, "")
-
-	if err = login.Write(conn); err != nil {
-		printAndExit(err.Error())
+func (c *client) login() error {
+	login := chatterbox.LoginRequest(c.ident, "")
+	if err := login.Write(c.conn); err != nil {
+		return err
 	}
 
 	resp := chatterbox.Response{}
-	resp.Read(conn)
+	if err := resp.Read(c.conn); err != nil {
+		return err
+	}
 
-	fmt.Println(resp.Type)
+	if resp.Type != "OK" {
+		return fmt.Errorf(resp.Type)
+	}
+
+	return nil
+}
+
+func (c *client) handleRequests() {
+	for {
+		req := chatterbox.Request{}
+		if err := req.Read(c.conn); err != nil {
+			fmt.Println("read", err)
+			continue
+		}
+
+		if req.Type == "SEND" {
+			p.Text += fmt.Sprintf("%s: %s\n", req.Args["From"][0], string(req.Data))
+			// fmt.Printf("\r%s:\n%s\n\n", req.Args["From"][0], string(req.Data))
+			ui.Render(p, inp)
+		}
+
+		// printWithPadding(string(c.msg), 50)
+	}
 }
 
 func printAndExit(msg string) {

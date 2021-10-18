@@ -64,57 +64,6 @@ func newInput() *input {
 	}
 }
 
-// if err := ui.Init(); err != nil {
-// 	log.Fatalf("failed to initialize termui: %v", err)
-// }
-// defer ui.Close()
-
-// width, height := ui.TerminalDimensions()
-
-// inp := newInput()
-// inp.Text = ""
-// inp.WrapText = true
-// inp.SetRect(0, height-5, width, height)
-
-// ui.Render(inp)
-
-// for e := range ui.PollEvents() {
-// 	if e.Type == ui.KeyboardEvent {
-// 		switch e.ID {
-// 		case "<C-c>":
-// 			return
-// 		case "<C-v>":
-// 			inp.Text = "pasted data"
-// 			inp.cursorLoc = len(inp.Text)
-// 		case "<Enter>":
-// 			inp.Text = ""
-// 			inp.cursorLoc = 0
-// 		case "<Left>":
-// 			if inp.cursorLoc > 0 {
-// 				inp.cursorLoc -= 1
-// 			}
-// 		case "<Right>":
-// 			if inp.cursorLoc < len(inp.Text) {
-// 				inp.cursorLoc += 1
-// 			}
-// 		case "<Backspace>":
-// 			if len(inp.Text) > 0 {
-// 				inp.Text = inp.Text[:inp.cursorLoc-1] + inp.Text[inp.cursorLoc:]
-// 				inp.cursorLoc -= 1
-// 			}
-// 		case "<Space>":
-// 			inp.Text = inp.Text[:inp.cursorLoc] + " " + inp.Text[inp.cursorLoc:]
-// 			inp.cursorLoc += 1
-// 		default:
-// 			if len(e.ID) == 1 {
-// 				inp.Text = inp.Text[:inp.cursorLoc] + e.ID + inp.Text[inp.cursorLoc:]
-// 				inp.cursorLoc += 1
-// 			}
-// 		}
-
-// 		ui.Render(inp)
-// 	}
-// }
 // conn, err := net.DialTCP("tcp", nil, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5051})
 // if err != nil {
 // 	log.Fatal(err)

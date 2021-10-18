@@ -1,18 +1,16 @@
-package session
+package chatterbox
 
 import (
 	"net"
-
-	"github.com/nwehr/chatterbox"
 )
 
 type Session struct {
 	ID       uint
-	Identity chatterbox.Identity
+	Identity Identity
 	Conn     net.Conn
 }
 
-func NewSession(ident chatterbox.Identity, conn net.Conn) *Session {
+func NewSession(ident Identity, conn net.Conn) *Session {
 	s := &Session{
 		ID:       nextID(),
 		Identity: ident,
@@ -36,7 +34,7 @@ func QuitSession(id uint) {
 	sessions = nextSessions
 }
 
-func SessionsForIdent(ident chatterbox.Identity) []*Session {
+func SessionsForIdent(ident Identity) []*Session {
 	identSessions := []*Session{}
 
 	for _, s := range sessions {

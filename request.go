@@ -4,39 +4,23 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"strings"
 )
 
-type Args map[string]string
+type Args map[string][]string
 
 func (h Args) Set(key, value string) {
-	h[key] = value
+	h[key] = []string{value}
+}
+
+func (h Args) Add(key, value string) {
+	h[key] = append(h[key], value)
 }
 
 type Request struct {
 	Type string
 	Args Args
 	Data []byte
-}
-
-func (r Request) Write(w io.Writer) error {
-	fmt.Fprintf(w, "%s\n", r.mainLine())
-
-	if len(r.Data) > 0 {
-		w.Write(r.Data)
-		w.Write([]byte{'\n'})
-	}
-
-	return nil
-}
-
-func (r Request) mainLine() string {
-	line := r.Type
-
-	for key, value := range r.Args {
-		line += fmt.Sprintf(" %s=%s", key, value)
-	}
-
-	return line
 }
 
 func (req *Request) Read(r io.Reader) error {
@@ -53,13 +37,36 @@ func (req *Request) Read(r io.Reader) error {
 	}
 
 	if len(req.Args["Length"]) > 0 {
-		req.Data, err = reader.ReadBytes('\n')
+		data, err := reader.ReadBytes('\n')
 		if err != nil {
 			return err
 		}
+
+		req.Data = data[:len(data)-1]
 	}
 
 	return nil
+}
+
+func (r Request) Write(w io.Writer) error {
+	fmt.Fprintf(w, "%s\n", r.mainLine())
+
+	if len(r.Data) > 0 {
+		w.Write(r.Data)
+		w.Write([]byte{'\n'})
+	}
+
+	return nil
+}
+
+func (r Request) mainLine() string {
+	line := r.Type
+
+	for key, values := range r.Args {
+		line += fmt.Sprintf(" %s=%s", key, strings.Join(values, ";"))
+	}
+
+	return line
 }
 
 func (r *Request) parseMainLine(buf []byte) error {
@@ -72,25 +79,72 @@ func (r *Request) parseMainLine(buf []byte) error {
 
 	for _, ch := range buf {
 		if ch == '\n' {
-			return nil
+			break
 		}
 
 		if ch == ' ' {
-			if len(r.Type) == 0 {
+			if r.Type == "" {
 				r.Type = key
-
-				key = ""
-				value = ""
-
-				continue
+			} else {
+				r.Args.Add(key, value)
 			}
-
-			r.Args.Set(key, value)
 
 			key = ""
 			value = ""
 			readKey = true
 
+			continue
+		}
+
+		if ch == '=' {
+			readKey = false
+			continue
+		}
+
+		if ch == ';' {
+			r.Args.Add(key, value)
+			value = ""
+			continue
+		}
+
+		if readKey {
+			key += string(ch)
+		} else {
+			value += string(ch)
+		}
+
+	}
+
+	r.Args.Add(key, value)
+	return nil
+}
+
+func parseMainLine(buf []byte) (string, Args, error) {
+	rType := ""
+	args := Args{}
+
+	key := ""
+	value := ""
+
+	readKey := true
+
+	for _, ch := range buf {
+		if ch == '\n' {
+			break
+		}
+
+		if ch == ' ' {
+			if rType == "" {
+				rType = key
+			} else {
+				args.Add(key, value)
+			}
+
+			key = ""
+			value = ""
+			readKey = true
+
+			continue
 		}
 
 		if ch == '=' {
@@ -106,15 +160,37 @@ func (r *Request) parseMainLine(buf []byte) error {
 
 	}
 
-	return nil
+	args.Add(key, value)
+
+	fmt.Println("args", args)
+
+	return rType, args, nil
 }
 
 func LoginRequest(ident Identity, password string) Request {
 	return Request{
 		Type: "LOGIN",
 		Args: Args{
-			"Identity": string(ident),
-			"Password": password,
+			"Identity": []string{string(ident)},
+			"Password": []string{password},
 		},
+	}
+}
+
+func SendRequest(from Identity, to []Identity, msg string) Request {
+	strTo := []string{}
+
+	for _, ident := range to {
+		strTo = append(strTo, string(ident))
+	}
+
+	return Request{
+		Type: "SEND",
+		Args: Args{
+			"To":     strTo,
+			"From":   []string{string(from)},
+			"Length": []string{fmt.Sprintf("%d", len(msg))},
+		},
+		Data: []byte(msg),
 	}
 }
