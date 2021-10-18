@@ -119,54 +119,6 @@ func (msg *Message) parseMainLine(buf []byte) error {
 	return nil
 }
 
-func parseMainLine(buf []byte) (string, Args, error) {
-	rType := ""
-	args := Args{}
-
-	key := ""
-	value := ""
-
-	readKey := true
-
-	for _, ch := range buf {
-		if ch == '\n' {
-			break
-		}
-
-		if ch == ' ' {
-			if rType == "" {
-				rType = key
-			} else {
-				args.Add(key, value)
-			}
-
-			key = ""
-			value = ""
-			readKey = true
-
-			continue
-		}
-
-		if ch == '=' {
-			readKey = false
-			continue
-		}
-
-		if readKey {
-			key += string(ch)
-		} else {
-			value += string(ch)
-		}
-
-	}
-
-	args.Add(key, value)
-
-	fmt.Println("args", args)
-
-	return rType, args, nil
-}
-
 func Login(ident Identity, password string) Message {
 	return Message{
 		Type: "LOGIN",
