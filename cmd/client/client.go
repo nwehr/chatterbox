@@ -75,7 +75,7 @@ func main() {
 			case "<Enter>":
 				if len(inp.Text) > 0 {
 					req := chatterbox.Send(chatterbox.Identity(client.ident), []chatterbox.Identity{client.ident, client.to[0]}, inp.Text)
-					if err := req.Write(client.conn); err != nil {
+					if _, err := req.WriteTo(client.conn); err != nil {
 						fmt.Println(err)
 					}
 
@@ -140,12 +140,12 @@ func (c *client) connect() error {
 
 func (c *client) login() error {
 	login := chatterbox.Login(c.ident, "")
-	if err := login.Write(c.conn); err != nil {
+	if _, err := login.WriteTo(c.conn); err != nil {
 		return err
 	}
 
 	resp := chatterbox.Message{}
-	if err := resp.Read(c.conn); err != nil {
+	if _, err := resp.ReadFrom(c.conn); err != nil {
 		return err
 	}
 
@@ -159,7 +159,7 @@ func (c *client) login() error {
 func (c *client) handleRequests() {
 	for {
 		msg := chatterbox.Message{}
-		if err := msg.Read(c.conn); err != nil {
+		if _, err := msg.ReadFrom(c.conn); err != nil {
 			fmt.Println("read", err)
 			continue
 		}

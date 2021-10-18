@@ -11,7 +11,7 @@ func TestSendRead(t *testing.T) {
 	rd := bytes.NewReader(buf)
 
 	msg := Message{}
-	msg.Read(rd)
+	msg.ReadFrom(rd)
 
 	if msg.Type != "SEND" {
 		t.Errorf("'%s' != '%s'", msg.Type, "SEND")
@@ -31,7 +31,7 @@ func TestSendWrite(t *testing.T) {
 	w := bytes.NewBuffer(buf)
 
 	msg := Send(Identity("@nate.errorcode.io"), []Identity{"@nate.errorcode.io", "@kevpatt.errorcode.io"}, "Hello, World!")
-	msg.Write(w)
+	msg.WriteTo(w)
 
 	// expected := "SEND To=@nate.errorcode.io;@kevpatt.errorcode.io From=@nate.errorcode.io Length=13\nHello, World!\n"
 
@@ -49,7 +49,7 @@ func TestSendOK(t *testing.T) {
 
 	{
 		msg := Ok()
-		if err := msg.Write(buf); err != nil {
+		if _, err := msg.WriteTo(buf); err != nil {
 			t.Error(err)
 		}
 	}
@@ -58,7 +58,7 @@ func TestSendOK(t *testing.T) {
 		// io.Copy(rBuf, wBuf)
 
 		msg := Message{}
-		if err := msg.Read(buf); err != nil {
+		if _, err := msg.ReadFrom(buf); err != nil {
 			t.Error(err)
 		}
 

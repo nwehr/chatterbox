@@ -58,7 +58,7 @@ func (s *server) handleNewConnection(conn net.Conn) {
 	// first message by a client should be LOGIN
 	{
 		msg := chatterbox.Message{}
-		if err := msg.Read(conn); err != nil {
+		if _, err := msg.ReadFrom(conn); err != nil {
 			fmt.Println("could not read login request", err)
 			return
 
@@ -69,7 +69,7 @@ func (s *server) handleNewConnection(conn net.Conn) {
 			return
 		}
 
-		if err := chatterbox.Ok().Write(conn); err != nil {
+		if _, err := chatterbox.Ok().WriteTo(conn); err != nil {
 			fmt.Println(err)
 		}
 
@@ -82,7 +82,7 @@ func (s *server) handleNewConnection(conn net.Conn) {
 
 	for {
 		msg := chatterbox.Message{}
-		if err := msg.Read(conn); err != nil {
+		if _, err := msg.ReadFrom(conn); err != nil {
 			if err == os.ErrDeadlineExceeded {
 				continue
 			}
@@ -116,7 +116,7 @@ func (s *server) handleMessage(msg chatterbox.Message) {
 
 			if ident.Host() == s.domain {
 				for _, conn := range s.sessions[ident] {
-					go msg.Write(conn)
+					go msg.WriteTo(conn)
 				}
 			}
 		}

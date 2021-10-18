@@ -23,40 +23,44 @@ type Message struct {
 	Data []byte
 }
 
-func (msg *Message) Read(r io.Reader) error {
+func (msg *Message) ReadFrom(r io.Reader) (int64, error) {
 	reader := bufio.NewReader(r)
 
 	mainLine, err := reader.ReadBytes('\n')
 	if err != nil {
-		return err
+		return int64(len(mainLine)), err
 	}
 
 	err = msg.parseMainLine(mainLine)
 	if err != nil {
-		return err
+		return int64(len(mainLine)), err
 	}
 
 	if len(msg.Args["Length"]) > 0 {
 		data, err := reader.ReadBytes('\n')
 		if err != nil {
-			return err
+			return int64(len(mainLine) + len(data)), err
 		}
 
 		msg.Data = data[:len(data)-1]
 	}
 
-	return nil
+	return int64(len(mainLine) + len(msg.Data)), nil
 }
 
-func (msg Message) Write(w io.Writer) error {
-	fmt.Fprintf(w, "%s\n", msg.mainLine())
-
-	if len(msg.Data) > 0 {
-		w.Write(msg.Data)
-		w.Write([]byte{'\n'})
+func (msg Message) WriteTo(w io.Writer) (int64, error) {
+	nMainLine, err := fmt.Fprintf(w, "%s\n", msg.mainLine())
+	if err != nil {
+		return int64(nMainLine), err
 	}
 
-	return nil
+	nDataLine := 0
+
+	if len(msg.Data) > 0 {
+		nDataLine, err = fmt.Fprintf(w, "%s\n", msg.Data)
+	}
+
+	return int64(nMainLine + nDataLine), err
 }
 
 func (msg Message) mainLine() string {
