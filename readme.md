@@ -1,4 +1,26 @@
-## Messages
+## Usage
+
+### Install Dependencies
+
+```
+$ go get ./...
+```
+
+### Build Client
+
+```
+$ make client
+```
+
+### Run Client
+
+`-i` is the identity you are signing in with. `-to` is the idenity you wish to start a conversation with.
+
+```
+./client -i @nate.errorcode.io -to @kevpatt.errorcode.io
+```
+
+## Protocol
 
 ### Login
 
