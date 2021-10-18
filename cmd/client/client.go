@@ -44,7 +44,7 @@ func main() {
 	}
 	fmt.Println("done")
 
-	go client.handleRequests()
+	go client.handleMessages()
 
 	if err := ui.Init(); err != nil {
 		fmt.Printf("failed to initialize termui: %v", err)
@@ -74,14 +74,14 @@ func main() {
 				inp.cursorLoc = len(inp.Text)
 			case "<Enter>":
 				if len(inp.Text) > 0 {
-					req := chatterbox.Send(chatterbox.Identity(client.ident), []chatterbox.Identity{client.ident, client.to[0]}, inp.Text)
-					if _, err := req.WriteTo(client.conn); err != nil {
+					msg := chatterbox.Send(chatterbox.Identity(client.ident), []chatterbox.Identity{client.ident, client.to[0]}, inp.Text)
+					if _, err := msg.WriteTo(client.conn); err != nil {
 						fmt.Println(err)
 					}
 
 					client.msg = []byte("")
 				}
-				// p.Text += "\n" + inp.Text
+
 				inp.Text = ""
 				inp.cursorLoc = 0
 			case "<Left>":
@@ -156,7 +156,7 @@ func (c *client) login() error {
 	return nil
 }
 
-func (c *client) handleRequests() {
+func (c *client) handleMessages() {
 	for {
 		msg := chatterbox.Message{}
 		if _, err := msg.ReadFrom(c.conn); err != nil {
@@ -166,11 +166,8 @@ func (c *client) handleRequests() {
 
 		if msg.Type == "SEND" {
 			p.Text += fmt.Sprintf("%s: %s\n", msg.Args["From"][0], string(msg.Data))
-			// fmt.Printf("\r%s:\n%s\n\n", req.Args["From"][0], string(req.Data))
 			ui.Render(p, inp)
 		}
-
-		// printWithPadding(string(c.msg), 50)
 	}
 }
 
