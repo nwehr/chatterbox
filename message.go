@@ -2,9 +2,14 @@ package chatterbox
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"strings"
+
+	"filippo.io/age"
+	"github.com/google/uuid"
 )
 
 type Args map[string][]string
@@ -15,6 +20,14 @@ func (h Args) Set(key, value string) {
 
 func (h Args) Add(key, value string) {
 	h[key] = append(h[key], value)
+}
+
+func (h Args) First(key string) string {
+	if len(h[key]) > 0 {
+		return h[key][0]
+	}
+
+	return ""
 }
 
 type Message struct {
@@ -57,7 +70,7 @@ func (msg Message) WriteTo(w io.Writer) (int64, error) {
 	nDataLine := 0
 
 	if len(msg.Data) > 0 {
-		nDataLine, err = fmt.Fprintf(w, "%s\n", msg.Data)
+		nDataLine, err = fmt.Fprintf(w, "%s\n\n", msg.Data)
 	}
 
 	return int64(nMainLine + nDataLine), err
@@ -136,21 +149,48 @@ func Login(ident Identity, password string) Message {
 	}
 }
 
-func Send(from Identity, to []Identity, msg string) Message {
-	strTo := []string{}
-
-	for _, ident := range to {
-		strTo = append(strTo, string(ident))
+func Msg(from Identity, recipients Identities, msg string) Message {
+	m := Message{
+		Type: "MSG",
+		Args: Args{
+			"Recipients": recipients.Strings(),
+			"From":       []string{string(from)},
+			"Encoding":   []string{"text/plain"},
+			"Uuid":       []string{uuid.NewString()},
+		},
 	}
 
+	key, _ := age.ParseX25519Recipient("age1rmpjlh40vsmry47pad0h4u0lavtrm0nlypaya4adf7xy9n0rd5zqzpgkua")
+
+	encoded := new(bytes.Buffer)
+
+	encoder := base64.NewEncoder(base64.RawStdEncoding, encoded)
+	encrypter, _ := age.Encrypt(encoder, key)
+	io.WriteString(encrypter, msg)
+
+	encrypter.Close()
+	encoder.Close()
+
+	m.Data = encoded.Bytes()
+	m.Args["Length"] = []string{fmt.Sprintf("%d", len(m.Data))}
+
+	return m
+}
+
+func LConv() Message {
 	return Message{
-		Type: "SEND",
+		Type: "LCONV",
+	}
+}
+
+func Conv(id string, recipients Identities, unread uint) Message {
+	return Message{
+		Type: "CONV",
 		Args: Args{
-			"To":     strTo,
-			"From":   []string{string(from)},
-			"Length": []string{fmt.Sprintf("%d", len(msg))},
+			"Id":         []string{id},
+			"Recipients": recipients.Strings(),
+			"Unread":     []string{fmt.Sprintf("%d", unread)},
 		},
-		Data: []byte(msg),
 	}
 }
 
@@ -158,4 +198,9 @@ func Ok() Message {
 	return Message{
 		Type: "OK",
 	}
+}
+
+type MessageRepo interface {
+	ListMessages(recipient Identity, conversationID string) ([]Message, error)
+	SaveMessage(Message) error
 }

@@ -29,8 +29,10 @@ func main() {
 }
 
 type server struct {
-	sessions map[chatterbox.Identity][]net.Conn
-	domain   string
+	sessions         map[chatterbox.Identity][]net.Conn
+	domain           string
+	conversationRepo chatterbox.ConversationRepo
+	messageRepo      chatterbox.MessageRepo
 }
 
 func (s *server) listen(addr string) error {
@@ -110,9 +112,9 @@ func (s *server) handleNewConnection(conn net.Conn) {
 
 func (s *server) handleMessage(msg chatterbox.Message) {
 	switch msg.Type {
-	case "SEND":
-		for _, to := range msg.Args["To"] {
-			ident := chatterbox.Identity(to)
+	case "MSG":
+		for _, recipient := range msg.Args["Recipients"] {
+			ident := chatterbox.Identity(recipient)
 
 			if ident.Host() == s.domain {
 				for _, conn := range s.sessions[ident] {

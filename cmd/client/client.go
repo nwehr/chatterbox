@@ -131,7 +131,7 @@ func (c *client) handleMessages(g *gocui.Gui) {
 			break
 		}
 
-		if msg.Type == "SEND" {
+		if msg.Type == "MSG" {
 			g.Update(func(g *gocui.Gui) error {
 				messages, err := g.View("messages")
 				if err != nil {
@@ -153,7 +153,7 @@ func (c *client) handleInput(g *gocui.Gui, input *gocui.View) error {
 	data := strings.TrimSpace(input.Buffer())
 
 	if len(data) > 0 {
-		msg := chatterbox.Send(chatterbox.Identity(c.ident), []chatterbox.Identity{c.ident, c.to[0]}, data)
+		msg := chatterbox.Msg(chatterbox.Identity(c.ident), []chatterbox.Identity{c.ident, c.to[0]}, data)
 		if _, err := msg.WriteTo(c.conn); err != nil {
 			fmt.Println(err)
 		}

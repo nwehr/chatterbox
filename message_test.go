@@ -2,68 +2,154 @@ package chatterbox
 
 import (
 	"bytes"
+	"encoding/base64"
+	"io"
 	"testing"
-	// "github.com/nwehr/chatterbox"
+
+	"filippo.io/age"
 )
 
-func TestSendRead(t *testing.T) {
-	buf := []byte("SEND To=@nate.errorcode.io From=@nate.errorcode.io Length=11\nHello World\n")
-	rd := bytes.NewReader(buf)
+func TestEncryptDecrypt(t *testing.T) {
+	encoded := &bytes.Buffer{}
 
-	msg := Message{}
-	msg.ReadFrom(rd)
+	{
+		publicKey := "age1cy0su9fwf3gf9mw868g5yut09p6nytfmmnktexz2ya5uqg9vl9sss4euqm"
+		recipient, err := age.ParseX25519Recipient(publicKey)
+		if err != nil {
+			t.Errorf("Failed to parse public key %q: %v", publicKey, err)
+		}
 
-	if msg.Type != "SEND" {
-		t.Errorf("'%s' != '%s'", msg.Type, "SEND")
+		encoder := base64.NewEncoder(base64.RawStdEncoding, encoded)
+		encrypter, err := age.Encrypt(encoder, recipient)
+		if err != nil {
+			t.Errorf("Failed to create encrypted file: %v", err)
+		}
+
+		if _, err := io.WriteString(encrypter, "Live free or die!"); err != nil {
+			t.Errorf("Failed to write to encrypted file: %v", err)
+		}
+
+		encrypter.Close()
+		encoder.Close()
 	}
 
-	if msg.Args["To"][0] != "@nate.errorcode.io" {
-		t.Errorf("'%s' != '%s'", msg.Args["To"][0], "@nate.errorcode.io")
-	}
+	{
+		identity, err := age.ParseX25519Identity("AGE-SECRET-KEY-184JMZMVQH3E6U0PSL869004Y3U2NYV7R30EU99CSEDNPH02YUVFSZW44VU")
+		if err != nil {
+			t.Errorf("Failed to parse private key: %v", err)
+		}
 
-	if string(msg.Data) != "Hello World" {
-		t.Errorf("'%s' != '%s'", string(msg.Data), "Hello World")
+		decoder := base64.NewDecoder(base64.RawStdEncoding, encoded)
+		decrypter, err := age.Decrypt(decoder, identity)
+		if err != nil {
+			t.Errorf("Failed to open encrypted file: %v", err)
+		}
+
+		decrypted := &bytes.Buffer{}
+		if _, err := io.Copy(decrypted, decrypter); err != nil {
+			t.Errorf("Failed to read encrypted file: %v", err)
+		}
+
+		if decryptedStr := decrypted.String(); decryptedStr != "Live free or die!" {
+			t.Errorf("unexpected result: %s", decryptedStr)
+		}
 	}
 }
 
-func TestSendWrite(t *testing.T) {
-	buf := make([]byte, 512)
-	w := bytes.NewBuffer(buf)
-
-	msg := Send(Identity("@nate.errorcode.io"), []Identity{"@nate.errorcode.io", "@kevpatt.errorcode.io"}, "Hello, World!")
-	msg.WriteTo(w)
-
-	// expected := "SEND To=@nate.errorcode.io;@kevpatt.errorcode.io From=@nate.errorcode.io Length=13\nHello, World!\n"
-
-	// if len(w.String()) != len(expected) {
-	// 	t.Errorf("expected %d; got %d", len(strings.TrimSpace(expected)), len(strings.TrimSpace(w.String())))
-	// }
-
-	// if w.String() != expected {
-	// 	t.Errorf("got '%s'; expected '%s'", w.String(), expected)
-	// }
-}
-
-func TestSendOK(t *testing.T) {
+func TestMsg(t *testing.T) {
 	buf := new(bytes.Buffer)
 
 	{
-		msg := Ok()
+		msg := Msg(Identity("@nate.errorcodelio"), []Identity{"@kevpatt.errorcode.io", "@nate.errorcode.io"}, "Hello, World!")
 		if _, err := msg.WriteTo(buf); err != nil {
 			t.Error(err)
 		}
 	}
 
 	{
-		// io.Copy(rBuf, wBuf)
-
 		msg := Message{}
 		if _, err := msg.ReadFrom(buf); err != nil {
 			t.Error(err)
 		}
 
-		if msg.Type != "OK" {
-			t.Errorf("expected OK; got %s", msg.Type)
+		if msg.Type != "MSG" {
+			t.Errorf("expected MSG; got %s", msg.Type)
+		}
+
+		if msg.Args["Recipients"][0] != "@kevpatt.errorcode.io" {
+			t.Errorf("'%s' != '%s'", msg.Args["Recipients"][0], "@kevpatt.errorcode.io")
+		}
+
+		identity, err := age.ParseX25519Identity("AGE-SECRET-KEY-1SG5WQSCUEPGY9ZZZ0M74AEK6DQDRP774ZHLVXS4662YAHUQLWS8SCJCR0V")
+		if err != nil {
+			t.Error(err)
+		}
+
+		decoder := base64.NewDecoder(base64.RawStdEncoding, bytes.NewReader(msg.Data))
+		decrypter, err := age.Decrypt(decoder, identity)
+		if err != nil {
+			t.Error(err)
+		}
+
+		decrypted := &bytes.Buffer{}
+		io.Copy(decrypted, decrypter)
+
+		if decryptedStr := decrypted.String(); decryptedStr != "Hello, World!" {
+			t.Errorf("'%s' != '%s'", decryptedStr, "Hello, World!")
+		}
+	}
+}
+
+func TestLConv(t *testing.T) {
+	buf := new(bytes.Buffer)
+
+	{
+		msg := LConv()
+		if _, err := msg.WriteTo(buf); err != nil {
+			t.Error(err)
+		}
+	}
+
+	{
+		msg := Message{}
+		if _, err := msg.ReadFrom(buf); err != nil {
+			t.Error(err)
+		}
+
+		if msg.Type != "LCONV" {
+			t.Errorf("expected LCONV; got %s", msg.Type)
+		}
+	}
+}
+
+func TestConv(t *testing.T) {
+	buf := new(bytes.Buffer)
+
+	{
+		recipients := Identities{"@kevpatt.errorcode.io", "@nate.errorcode.io"}
+
+		msg := Conv(recipients.ConversationID(), recipients, 3)
+		if _, err := msg.WriteTo(buf); err != nil {
+			t.Error(err)
+		}
+	}
+
+	{
+		msg := Message{}
+		if _, err := msg.ReadFrom(buf); err != nil {
+			t.Error(err)
+		}
+
+		if msg.Type != "CONV" {
+			t.Errorf("expected CONV; got %s", msg.Type)
+		}
+
+		if msg.Args["Id"][0] != "a83087325cec029b2c39464aa0d2ea94f9282531cb53ad41143ea8bcea78205a" {
+			t.Errorf("'%s' != '%s'", msg.Args["Id"][0], "a83087325cec029b2c39464aa0d2ea94f9282531cb53ad41143ea8bcea78205a")
+		}
+
+		if msg.Args["Unread"][0] != "3" {
+			t.Errorf("'%s' != '%s'", msg.Args["Unread"][0], "3")
 		}
 	}
 }
